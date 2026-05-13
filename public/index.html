@@ -1,12 +1,144 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Car Deal Analyzer</title><style>  * { box-sizing: border-box; margin: 0; padding: 0; }  body { font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem 1rem 3rem; background: #fff; color: #111; }  h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }  p.sub { color: #666; font-size: 0.9rem; margin-bottom: 1rem; }  textarea { width: 100%; padding: 0.75rem; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 8px; resize: none; font-family: inherit; }  textarea:focus { outline: none; border-color: #111; }  button { margin-top: 0.5rem; width: 100%; padding: 0.75rem; background: #111; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; }  button:disabled { opacity: 0.45; cursor: not-allowed; }  #error { display:none; margin-top: 0.75rem; padding: 0.75rem; background: #fff0f0; border: 1px solid #f99; border-radius: 8px; color: #c00; font-size: 0.875rem; }  #results { display: none; margin-top: 1.5rem; }  .section { margin-bottom: 1.25rem; }  .section h2 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; color: #999; margin-bottom: 0.5rem; }  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }  .pill { background: #f5f5f5; border-radius: 6px; padding: 0.5rem 0.6rem; }  .pill .label { font-size: 0.6rem; text-transform: uppercase; color: #999; }  .pill .val { font-size: 0.9rem; font-weight: 600; }  .verdict-box { padding: 1rem; border-radius: 8px; border: 2px solid; }  .verdict-name { font-size: 1.3rem; font-weight: 800; margin-bottom: 0.4rem; }  .verdict-explain { font-size: 0.875rem; color: #444; line-height: 1.55; }  .issue { display: flex; gap: 0.6rem; padding: 0.65rem 0; border-bottom: 1px solid #eee; align-items: flex-start; }  .issue:last-child { border-bottom: none; }  .dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }  .issue-name { font-size: 0.875rem; font-weight: 500; }  .issue-miles { font-size: 0.75rem; color: #888; }  .sev { font-size: 0.62rem; font-weight: 700; margin-left: auto; padding: 0.2rem 0.5rem; border-radius: 4px; white-space: nowrap; align-self: center; }  .disclaimer { font-size: 0.7rem; color: #bbb; margin-top: 0.5rem; }</style></head><body>
-<h1> Car Deal Analyzer</h1><p class="sub">Paste a listing to get an instant deal rating + known issues.</p>
-<textarea id="listing" rows="5" placeholder="e.g. 2019 Honda Civic EX, 67k miles, asking $18,500, one owner, clean title..."></textarea><button id="btn" onclick="analyze()">Analyze This Deal</button><div id="error"></div>
-<div id="results">  <div class="section">    <h2>Vehicle</h2>    <div class="grid" id="grid"></div>  </div>  <div class="section">    <h2>Verdict</h2>    <div class="verdict-box" id="verdict-box">      <div class="verdict-name" id="verdict-name"></div>      <div class="verdict-explain" id="verdict-explain"></div>    </div>  </div>  <div class="section">    <h2>Known Issues</h2>    <div id="issues"></div>  </div>  <p class="disclaimer">AI analysis only — always inspect with a mechanic before buying.</p></div>
-<script>  const COLORS = {    "GREAT DEAL": { bg: "#e6fff2", border: "#00c853", dot: "#00c853" },    "GOOD DEAL": { bg: "#f0fff4", border: "#43a047", dot: "#43a047" },    "FAIR PRICE": { bg: "#fffde7", border: "#f9a825", dot: "#f9a825" },    "OVERPRICED": { bg: "#fff0f0", border: "#e53935", dot: "#e53935" },    "NEEDS RESEARCH": { bg: "#e8f4fd", border: "#1e88e5", dot: "#1e88e5" },  };  const SEV = {    Low: { color: "#2e7d32", bg: "#e8f5e9" },    Medium: { color: "#e65100", bg: "#fff3e0" },    High: { color: "#b71c1c", bg: "#ffebee" },  };
-  async function analyze() {    const listing = document.getElementById("listing").value.trim();    if (!listing) return;    const btn = document.getElementById("btn");    const err = document.getElementById("error");    const results = document.getElementById("results");    btn.disabled = true;    btn.textContent = "Analyzing...";    err.style.display = "none";    results.style.display = "none";
-    try {      // Calls YOUR server — API key never touches the browser      const res = await fetch("/analyze", {        method: "POST",        headers: { "Content-Type": "application/json" },        body: JSON.stringify({ listing }),      });      if (!res.ok) throw new Error();      const r = await res.json();      render(r);    } catch {      err.textContent = "Something went wrong. Please try again.";      err.style.display = "block";    }
-    btn.disabled = false;    btn.textContent = "Analyze This Deal";  }
-  function render(r) {    const fields = [      ["Year", r.extracted.year], ["Make", r.extracted.make], ["Model", r.extracted.model],      ["Trim", r.extracted.trim], ["Miles", r.extracted.miles], ["Price", r.extracted.price],    ];    document.getElementById("grid").innerHTML = fields.map(([l, v]) =>      `<div class="pill"><div class="label">${l}</div><div class="val">${v || "—"}</div></div>`    ).join("");
-    const c = COLORS[r.verdict] || COLORS["NEEDS RESEARCH"];    const box = document.getElementById("verdict-box");    box.style.background = c.bg;    box.style.borderColor = c.border;    const vName = document.getElementById("verdict-name");    vName.textContent = r.verdict;    vName.style.color = c.border;    document.getElementById("verdict-explain").textContent = r.verdict_explanation;
-    document.getElementById("issues").innerHTML = r.known_issues.map(issue => {      const s = SEV[issue.severity] || SEV.Medium;      return `<div class="issue">        <div class="dot" style="background:${s.color}"></div>        <div style="flex:1">          <div class="issue-name">${issue.issue}</div>          <div class="issue-miles">Typical onset: ${issue.typical_mileage}</div>        </div>        <div class="sev" style="color:${s.color};background:${s.bg}">${issue.severity}</div>      </div>`;    }).join("");
-    const results = document.getElementById("results");    results.style.display = "block";    results.scrollIntoView({ behavior: "smooth" });  }</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Car Deal Analyzer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 1.5rem 1rem 3rem; background: #fff; color: #111; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+  p.sub { color: #666; font-size: 0.9rem; margin-bottom: 1rem; }
+  textarea { width: 100%; padding: 0.75rem; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 8px; resize: none; font-family: inherit; }
+  textarea:focus { outline: none; border-color: #111; }
+  button { margin-top: 0.5rem; width: 100%; padding: 0.75rem; background: #111; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  #error { display:none; margin-top: 0.75rem; padding: 0.75rem; background: #fff0f0; border: 1px solid #f99; border-radius: 8px; color: #c00; font-size: 0.875rem; }
+  #results { display: none; margin-top: 1.5rem; }
+  .section { margin-bottom: 1.25rem; }
+  .section h2 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; color: #999; margin-bottom: 0.5rem; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+  .pill { background: #f5f5f5; border-radius: 6px; padding: 0.5rem 0.6rem; }
+  .pill .label { font-size: 0.6rem; text-transform: uppercase; color: #999; }
+  .pill .val { font-size: 0.9rem; font-weight: 600; }
+  .verdict-box { padding: 1rem; border-radius: 8px; border: 2px solid; }
+  .verdict-name { font-size: 1.3rem; font-weight: 800; margin-bottom: 0.4rem; }
+  .verdict-explain { font-size: 0.875rem; color: #444; line-height: 1.55; }
+  .issue { display: flex; gap: 0.6rem; padding: 0.65rem 0; border-bottom: 1px solid #eee; align-items: flex-start; }
+  .issue:last-child { border-bottom: none; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .issue-name { font-size: 0.875rem; font-weight: 500; }
+  .issue-miles { font-size: 0.75rem; color: #888; }
+  .sev { font-size: 0.62rem; font-weight: 700; margin-left: auto; padding: 0.2rem 0.5rem; border-radius: 4px; white-space: nowrap; align-self: center; }
+  .disclaimer { font-size: 0.7rem; color: #bbb; margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+
+  <h1>🚗 Car Deal Analyzer</h1>
+<p class="sub">Paste a listing to get an instant deal rating + known issues.</p>
+
+  <textarea id="listing" rows="5" placeholder="e.g. 2019 Honda Civic EX, 67k miles, asking $18,500, one owner, clean title..."></textarea>
+<button id="btn" onclick="analyze()">Analyze This Deal</button>
+<div id="error"></div>
+
+  <div id="results">
+  <div class="section">
+    <h2>Vehicle</h2>
+    <div class="grid" id="grid"></div>
+  </div>
+  <div class="section">
+    <h2>Verdict</h2>
+    <div class="verdict-box" id="verdict-box">
+      <div class="verdict-name" id="verdict-name"></div>
+      <div class="verdict-explain" id="verdict-explain"></div>
+    </div>
+  </div>
+  <div class="section">
+    <h2>Known Issues</h2>
+    <div id="issues"></div>
+  </div>
+  <p class="disclaimer">Always inspect with a mechanic before buying.</p>
+</div>
+
+  <script>
+  const COLORS = {
+    "GREAT DEAL": { bg: "#e6fff2", border: "#00c853", dot: "#00c853" },
+    "GOOD DEAL": { bg: "#f0fff4", border: "#43a047", dot: "#43a047" },
+    "FAIR PRICE": { bg: "#fffde7", border: "#f9a825", dot: "#f9a825" },
+    "OVERPRICED": { bg: "#fff0f0", border: "#e53935", dot: "#e53935" },
+    "NEEDS RESEARCH": { bg: "#e8f4fd", border: "#1e88e5", dot: "#1e88e5" },
+  };
+  const SEV = {
+    Low: { color: "#2e7d32", bg: "#e8f5e9" },
+    Medium: { color: "#e65100", bg: "#fff3e0" },
+    High: { color: "#b71c1c", bg: "#ffebee" },
+  };
+
+      async function analyze() {
+    const listing = document.getElementById("listing").value.trim();
+    if (!listing) return;
+    const btn = document.getElementById("btn");
+    const err = document.getElementById("error");
+    const results = document.getElementById("results");
+    btn.disabled = true;
+    btn.textContent = "Analyzing...";
+    err.style.display = "none";
+    results.style.display = "none";
+
+        try {
+      // Calls YOUR server — API key never touches the browser
+      const res = await fetch("/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listing }),
+      });
+      if (!res.ok) throw new Error();
+      const r = await res.json();
+      render(r);
+    } catch {
+      err.textContent = "Something went wrong. Please try again.";
+      err.style.display = "block";
+    }
+
+        btn.disabled = false;
+    btn.textContent = "Analyze This Deal";
+  }
+
+      function render(r) {
+    const fields = [
+      ["Year", r.extracted.year], ["Make", r.extracted.make], ["Model", r.extracted.model],
+      ["Trim", r.extracted.trim], ["Miles", r.extracted.miles], ["Price", r.extracted.price],
+    ];
+    document.getElementById("grid").innerHTML = fields.map(([l, v]) =>
+      `<div class="pill"><div class="label">${l}</div><div class="val">${v || "—"}</div></div>`
+    ).join("");
+
+        const c = COLORS[r.verdict] || COLORS["NEEDS RESEARCH"];
+    const box = document.getElementById("verdict-box");
+    box.style.background = c.bg;
+    box.style.borderColor = c.border;
+    const vName = document.getElementById("verdict-name");
+    vName.textContent = r.verdict;
+    vName.style.color = c.border;
+    document.getElementById("verdict-explain").textContent = r.verdict_explanation;
+
+        document.getElementById("issues").innerHTML = r.known_issues.map(issue => {
+      const s = SEV[issue.severity] || SEV.Medium;
+      return `<div class="issue">
+        <div class="dot" style="background:${s.color}"></div>
+        <div style="flex:1">
+          <div class="issue-name">${issue.issue}</div>
+          <div class="issue-miles">Typical onset: ${issue.typical_mileage}</div>
+        </div>
+        <div class="sev" style="color:${s.color};background:${s.bg}">${issue.severity}</div>
+      </div>`;
+    }).join("");
+        
+    const results = document.getElementById("results");
+    results.style.display = "block";
+    results.scrollIntoView({ behavior: "smooth" });
+  }
+</script>
+</body>
+</html>
